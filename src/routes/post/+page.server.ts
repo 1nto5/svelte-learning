@@ -12,7 +12,8 @@ import type { Actions, PageServerLoad } from './$types';
 // };
 
 export const actions: Actions = {
-	login: async (event) => {
+	save: async (event) => {
+		await new Promise((fulfil) => setTimeout(fulfil, 1000));
 		const formData = await event.request.formData();
 		const title = String(formData.get('title'));
 		const content = String(formData.get('content'));
