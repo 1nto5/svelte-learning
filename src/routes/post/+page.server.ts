@@ -1,9 +1,5 @@
-import { dev } from '$app/environment';
-import * as auth from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
-import { hash, verify } from '@node-rs/argon2';
-import { generateRandomString } from '@oslojs/crypto/random';
 import { fail, redirect } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
@@ -18,106 +14,38 @@ import type { Actions, PageServerLoad } from './$types';
 export const actions: Actions = {
 	login: async (event) => {
 		const formData = await event.request.formData();
-		const title = formData.get('title');
-		const content = formData.get('content');
+		const title = String(formData.get('title'));
+		const content = String(formData.get('content'));
+		const userId = event.locals.user?.id;
 
-		// if (!validateUsername(username)) {
-		// 	return fail(400, { message: 'Invalid username' });
-		// }
-		// if (!validatePassword(password)) {
-		// 	return fail(400, { message: 'Invalid password' });
-		// }
-
-		// const results = await db.select().from(table.user).where(eq(table.user.username, username));
-
-		// const existingUser = results.at(0);
-		// if (!existingUser) {
-		// 	return fail(400, { message: 'Incorrect username or password' });
-		// }
-
-		// const validPassword = await verify(existingUser.passwordHash, password, {
-		// 	memoryCost: 19456,
-		// 	timeCost: 2,
-		// 	outputLen: 32,
-		// 	parallelism: 1
-		// });
-		// if (!validPassword) {
-		// 	return fail(400, { message: 'Incorrect username or password' });
-		// }
-
-		// const session = await auth.createSession(existingUser.id);
-		// event.cookies.set(auth.sessionCookieName, session.id, {
-		// 	path: '/',
-		// 	sameSite: 'lax',
-		// 	httpOnly: true,
-		// 	expires: session.expiresAt,
-		// 	secure: !dev
-		// });
-
-		// return redirect(302, '/demo/lucia');
-
-		// save post to db
-		if (!event.locals.user) {
+		if (!userId) {
 			return fail(400, { message: 'User not authenticated' });
 		}
-		await db
-			.insert(table.post)
-			.values({ userId: event.locals.user.id, title, content, createdAt: new Date() });
-	},
-	register: async (event) => {
-		const formData = await event.request.formData();
-		const username = formData.get('username');
-		const password = formData.get('password');
+		if (!title || !content) {
+			return fail(400, { message: 'Title and content are required' });
+		}
 
-		// if (!validateUsername(username)) {
-		// 	return fail(400, { message: 'Invalid username' });
-		// }
-		// if (!validatePassword(password)) {
-		// 	return fail(400, { message: 'Invalid password' });
-		// }
+		const userRoles = await db
+			.select({
+				roleName: table.roles.name
+			})
+			.from(table.userRoles)
+			.innerJoin(table.roles, eq(table.userRoles.roleId, table.roles.id))
+			.where(eq(table.userRoles.userId, userId));
 
-		// const userId = generateUserId();
-		// const passwordHash = await hash(password, {
-		// 	// recommended minimum parameters
-		// 	memoryCost: 19456,
-		// 	timeCost: 2,
-		// 	outputLen: 32,
-		// 	parallelism: 1
-		// });
+		const roleNames = userRoles.map((role) => role.roleName);
 
-		// try {
-		// 	await db.insert(table.post).values({ id: userId, username, passwordHash });
+		if (!roleNames.includes('writer')) {
+			return fail(400, { message: 'User is not writer' });
+		}
 
-		// 	const session = await auth.createSession(userId);
-		// 	event.cookies.set(auth.sessionCookieName, session.id, {
-		// 		path: '/',
-		// 		sameSite: 'lax',
-		// 		httpOnly: true,
-		// 		expires: session.expiresAt,
-		// 		secure: !dev
-		// 	});
-		// } catch (e) {
-		// 	return fail(500, { message: 'An error has occurred' });
-		// }
-		// return redirect(302, '/demo/lucia');
+		const post: Omit<table.Post, 'id'> = {
+			userId,
+			title,
+			content,
+			createdAt: new Date()
+		};
+
+		await db.insert(table.posts).values(post);
 	}
 };
-
-const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
-
-function generateUserId(length = 21): string {
-	return generateRandomString({ read: (bytes) => crypto.getRandomValues(bytes) }, alphabet, length);
-}
-
-function validateUsername(username: unknown): username is string {
-	return (
-		typeof username === 'string' &&
-		username.length >= 3 &&
-		username.length <= 31 &&
-		/^[a-z0-9_-]+$/.test(username)
-	);
-}
-
-function validatePassword(password: unknown): password is string {
-	return typeof password === 'string' && password.length >= 6 && password.length <= 255;
-}

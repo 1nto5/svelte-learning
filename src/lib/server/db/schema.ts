@@ -7,6 +7,21 @@ export const user = pgTable('user', {
 	passwordHash: text('password_hash').notNull()
 });
 
+export const roles = pgTable('roles', {
+	id: serial('id').primaryKey(),
+	name: text('name').notNull().unique()
+});
+
+export const userRoles = pgTable('user_roles', {
+	id: serial('id').primaryKey(),
+	userId: text('user_id')
+		.notNull()
+		.references(() => user.id),
+	roleId: integer('role_id')
+		.notNull()
+		.references(() => roles.id)
+});
+
 export const session = pgTable('session', {
 	id: text('id').primaryKey(),
 	userId: text('user_id')
@@ -15,7 +30,7 @@ export const session = pgTable('session', {
 	expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull()
 });
 
-export const post = pgTable('post', {
+export const posts = pgTable('posts', {
 	id: serial('id').primaryKey(),
 	userId: text('user_id')
 		.notNull()
@@ -28,3 +43,5 @@ export const post = pgTable('post', {
 export type Session = typeof session.$inferSelect;
 
 export type User = typeof user.$inferSelect;
+
+export type Post = typeof posts.$inferSelect;
